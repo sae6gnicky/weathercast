@@ -13,31 +13,8 @@
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 우클릭 및 단축키 방지 스크립트 -->
-    <script>
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        });
-        document.addEventListener('keydown', function(e) {
-            if (
-                e.key === 'F12' ||
-                (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-                (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
-            ) {
-                e.preventDefault();
-            }
-        });
-    </script>
-
     <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; 
-            overflow: hidden; 
-            background-color: black; 
-            user-select: none;
-        }
+        body { margin: 0; padding: 0; font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; overflow: hidden; background-color: black; }
         .text-shadow { text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
     </style>
 </head>
@@ -47,53 +24,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 에셋 URL 설정 (상대경로 우선 적용 + 공식 Raw CDN 백업) ---
-        const ASSETS = {
-            openingVideo: './opening.mp4',
-            bground: './bground.png',
-            title: './title.png',
-            weatherStudioBg: './2.png',
-            weatherBgs: {
-                sunny: './sunny.png',
-                cloudy: './cloudy.png',
-                rainy: './rainy.png',
-                snowy: './snowy.png',
-                windy: './windy.png',
-                dust: './dust.png',
-                hot: './hot.png'
-            }
-        };
-
-        const FALLBACK_ASSETS = {
-            openingVideo: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/opening.mp4',
-            bground: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/bground.png',
-            title: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/title.png',
-            weatherStudioBg: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/2.png',
-            weatherBgs: {
-                sunny: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/sunny.png',
-                cloudy: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/cloudy.png',
-                rainy: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/rainy.png',
-                snowy: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/snowy.png',
-                windy: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/windy.png',
-                dust: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/dust.png',
-                hot: 'https://raw.githubusercontent.com/sae6gnicky/weathercast/main/hot.png'
-            }
-        };
-
-        const handleImgError = (e, fallbackUrl) => {
-            if (fallbackUrl && e.target.src !== fallbackUrl) {
-                e.target.src = fallbackUrl;
-            }
-        };
-
-        const handleVideoError = (e, fallbackUrl) => {
-            if (fallbackUrl && e.target.src !== fallbackUrl) {
-                e.target.src = fallbackUrl;
-                e.target.load();
-                e.target.play().catch(() => {});
-            }
-        };
-
+        // --- Lucide React 아이콘들을 독립적인 SVG 컴포넌트로 대체 ---
         const Icon = ({ children, size = 24, color = "currentColor", className = "" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
@@ -124,18 +55,7 @@
             const [currentCitizenIndex, setCurrentCitizenIndex] = useState(0);
             
             const [weatherType, setWeatherType] = useState('sunny');
-            const [realtimeData, setRealtimeData] = useState({
-                type: 'sunny',
-                temp: '25°C',
-                humidity: '40%',
-                windSpeed: '24 KM/H',
-                windDir: 'WEST',
-                pressure: '1023 MB',
-                todayTemp: '27°C',
-                todaySubTemp: '11°C',
-                todayBg: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80',
-                todayIcon: Sun
-            });
+            const [realtimeWeatherType, setRealtimeWeatherType] = useState('sunny'); // 실시간 날씨 데이터 상태
             const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState(false);
             
             const videoRef = useRef(null);
@@ -147,92 +67,59 @@
             const [hasCameraPermission, setHasCameraPermission] = useState(false);
             const globalStreamRef = useRef(null); 
 
-            // 실시간 날씨 정보를 가져오는 Effect (Open-Meteo API 연동)
+            // 날씨별 배경화면 맵
+            const weatherBackgrounds = {
+                sunny: 'https://github.com/sae6gnicky/weathercast/raw/main/sunny.png',
+                cloudy: 'https://github.com/sae6gnicky/weathercast/raw/main/cloudy.png',
+                rainy: 'https://github.com/sae6gnicky/weathercast/raw/main/rainy.png',
+                snowy: 'https://github.com/sae6gnicky/weathercast/raw/main/snowy.png',
+                windy: 'https://github.com/sae6gnicky/weathercast/raw/main/windy.png',
+                dust: 'https://github.com/sae6gnicky/weathercast/raw/main/dust.png',
+                hot: 'https://github.com/sae6gnicky/weathercast/raw/main/hot.png'
+            };
+
+            // 실시간 날씨 정보를 가져오는 Effect
             useEffect(() => {
                 const fetchRealtimeWeather = async () => {
                     try {
-                        const weatherRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,relative_humidity_2m,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m');
+                        // 서울 위경도 기준 날씨 정보 가져오기
+                        const weatherRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current_weather=true');
                         const weatherData = await weatherRes.json();
-                        
-                        const current = weatherData.current;
-                        const code = current.weather_code;
-                        const tempVal = Math.round(current.temperature_2m);
-                        const humidityVal = `${Math.round(current.relative_humidity_2m)}%`;
-                        const windVal = `${Math.round(current.wind_speed_10m)} KM/H`;
-                        const pressureVal = `${Math.round(current.surface_pressure)} MB`;
-                        
-                        let windDirText = 'WEST';
-                        const deg = current.wind_direction_10m;
-                        if (deg !== undefined) {
-                            const dirs = ['NORTH', 'NE', 'EAST', 'SE', 'SOUTH', 'SW', 'WEST', 'NW'];
-                            windDirText = dirs[Math.round(((deg %= 360) < 0 ? deg + 360 : deg) / 45) % 8];
-                        }
+                        const code = weatherData.current_weather.weathercode;
+                        const temp = weatherData.current_weather.temperature;
+                        const wind = weatherData.current_weather.windspeed;
 
+                        // 공기질 정보 가져오기 (실패 시 기본값 처리)
                         let pm10 = 0;
                         try {
                             const airRes = await fetch('https://air-quality-api.open-meteo.com/v1/air-quality?latitude=37.5665&longitude=126.9780&current=pm10');
                             const airData = await airRes.json();
                             pm10 = airData.current.pm10;
-                        } catch(e) {}
+                        } catch(e) { console.warn("미세먼지 정보를 가져오는데 실패했습니다.", e); }
 
                         let type = 'sunny';
-                        let iconComp = Sun;
-                        let bgImg = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80';
-
-                        if (code === 0) {
-                            type = 'sunny';
-                            iconComp = Sun;
-                            bgImg = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80';
-                        } else if (code >= 1 && code <= 3 || [45, 48].includes(code)) {
-                            type = 'cloudy';
-                            iconComp = CloudSun;
-                            bgImg = 'https://images.unsplash.com/photo-1499956827185-0d63ee78a910?w=600&q=80';
-                        } else if (code >= 51 && code <= 67 || (code >= 95 && code <= 99)) {
-                            type = 'rainy';
-                            iconComp = CloudRain;
-                            bgImg = 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=600&q=80';
-                        } else if (code >= 71 && code <= 86) {
-                            type = 'snowy';
-                            iconComp = CloudSnow;
-                            bgImg = 'https://images.unsplash.com/photo-1542601098-3adb3baeb1ec?w=600&q=80';
-                        }
-
-                        if (pm10 > 80) {
-                            type = 'dust';
-                            iconComp = Haze;
-                            bgImg = 'https://images.unsplash.com/photo-1545134969-8debd725b733?w=600&q=80';
-                        }
-                        if (current.wind_speed_10m >= 36) {
-                            type = 'windy';
-                            iconComp = Wind;
-                            bgImg = 'https://images.unsplash.com/photo-1476820865390-c52aeebb9891?w=600&q=80';
-                        }
-                        if (current.temperature_2m >= 33) {
-                            type = 'hot';
-                            iconComp = Sun;
-                            bgImg = 'https://images.unsplash.com/photo-1504370805625-d32c54b16100?w=600&q=80';
-                        }
-
-                        setRealtimeData({
-                            type,
-                            temp: `${tempVal}°C`,
-                            humidity: humidityVal,
-                            windSpeed: windVal,
-                            windDir: windDirText,
-                            pressure: pressureVal,
-                            todayTemp: `${tempVal}°C`,
-                            todaySubTemp: `${tempVal - 8}° / ${tempVal + 3}°C`,
-                            todayBg: bgImg,
-                            todayIcon: iconComp
-                        });
+                        if (code === 0) type = 'sunny';
+                        else if (code >= 1 && code <= 3) type = 'cloudy';
+                        else if ([45, 48].includes(code)) type = 'cloudy'; // 안개
+                        else if (code >= 51 && code <= 67) type = 'rainy';
+                        else if (code >= 71 && code <= 86) type = 'snowy';
+                        else if (code >= 95 && code <= 99) type = 'rainy'; // 뇌우
+                        
+                        // 특보 기준 덮어쓰기 (우선순위: 미세먼지 < 바람 < 폭염)
+                        if (pm10 > 80) type = 'dust'; 
+                        if (wind >= 36) type = 'windy'; 
+                        if (temp >= 33) type = 'hot'; 
+                        
+                        setRealtimeWeatherType(type);
                     } catch (err) {
                         console.error('실시간 날씨 정보를 가져오는데 실패했습니다.', err);
+                        setRealtimeWeatherType('sunny'); // 에러 시 기본 맑음 처리
                     }
                 };
                 fetchRealtimeWeather();
             }, []);
 
-            // 날짜 렌더링 헬퍼 함수
+            // 날짜 및 텍스트 렌더링 헬퍼 함수
             const getDates = (type) => {
                 let baseDateStr;
                 if (type === 'realtime') {
@@ -244,7 +131,7 @@
                         'cloudy': '2026-06-26',
                         'rainy': '2026-06-26',
                         'snowy': '2026-02-02',
-                        'windy': '2025-10-23',
+                        'windy': '2025-10-23', // 날짜 변경됨
                         'dust': '2026-03-16',
                         'hot': '2026-08-08'
                     };
@@ -264,59 +151,41 @@
                 };
             };
 
-            // 선택된 날씨에 따른 데이터 반환
+            // 선택된 날씨에 따른 날씨 UI 데이터 헬퍼 함수 (어제, 오늘, 내일 분리)
             const getRenderWeatherData = () => {
-                if (weatherType === 'realtime') {
-                    return {
-                        humidity: realtimeData.humidity,
-                        windSpeed: realtimeData.windSpeed,
-                        windDir: realtimeData.windDir,
-                        pressure: realtimeData.pressure,
-                        yesterday: { icon: CloudSun, mainTemp: '24°C', subTemp: '12°C' },
-                        today: { icon: realtimeData.todayIcon, mainTemp: realtimeData.todayTemp, subTemp: realtimeData.todaySubTemp, bg: realtimeData.todayBg },
-                        tomorrow: { icon: Sun, mainTemp: '26°C', subTemp: '14°C' }
-                    };
-                }
-
+                const type = weatherType === 'realtime' ? realtimeWeatherType : weatherType;
                 const weatherForecasts = {
                     sunny: {
-                        humidity: '40%', windSpeed: '24 KM/H', windDir: 'WEST', pressure: '1023 MB',
                         yesterday: { icon: CloudSun, mainTemp: '26°C', subTemp: '10°C' },
                         today: { icon: Sun, mainTemp: '27°C', subTemp: '11°C', bg: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80' },
                         tomorrow: { icon: Sun, mainTemp: '25°C', subTemp: '12°C' }
                     },
                     cloudy: {
-                        humidity: '65%', windSpeed: '18 KM/H', windDir: 'EAST', pressure: '1015 MB',
                         yesterday: { icon: Sun, mainTemp: '28°C', subTemp: '19°C' },
                         today: { icon: CloudSun, mainTemp: '26°C', subTemp: '20°C', bg: 'https://images.unsplash.com/photo-1499956827185-0d63ee78a910?w=600&q=80' },
                         tomorrow: { icon: CloudRain, mainTemp: '24°C', subTemp: '18°C' }
                     },
                     rainy: {
-                        humidity: '90%', windSpeed: '32 KM/H', windDir: 'SOUTH', pressure: '1005 MB',
                         yesterday: { icon: CloudSun, mainTemp: '29°C', subTemp: '21°C' },
                         today: { icon: CloudRain, mainTemp: '25°C', subTemp: '20°C', bg: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=600&q=80' },
                         tomorrow: { icon: CloudRain, mainTemp: '26°C', subTemp: '20°C' }
                     },
                     snowy: {
-                        humidity: '75%', windSpeed: '28 KM/H', windDir: 'NORTH', pressure: '1030 MB',
                         yesterday: { icon: CloudSun, mainTemp: '1°C', subTemp: '-7°C' },
                         today: { icon: CloudSnow, mainTemp: '-2°C', subTemp: '-10°C', bg: 'https://images.unsplash.com/photo-1542601098-3adb3baeb1ec?w=600&q=80' },
                         tomorrow: { icon: Sun, mainTemp: '0°C', subTemp: '-8°C' }
                     },
                     windy: {
-                        humidity: '45%', windSpeed: '45 KM/H', windDir: 'NORTH-WEST', pressure: '1010 MB',
                         yesterday: { icon: CloudSun, mainTemp: '14°C', subTemp: '5°C' },
                         today: { icon: Wind, mainTemp: '12°C', subTemp: '2°C', bg: 'https://images.unsplash.com/photo-1476820865390-c52aeebb9891?w=600&q=80' },
                         tomorrow: { icon: Sun, mainTemp: '15°C', subTemp: '4°C' }
                     },
                     dust: {
-                        humidity: '50%', windSpeed: '15 KM/H', windDir: 'SOUTH', pressure: '1020 MB',
                         yesterday: { icon: Sun, mainTemp: '15°C', subTemp: '6°C' },
                         today: { icon: Haze, mainTemp: '16°C', subTemp: '5°C', bg: 'https://images.unsplash.com/photo-1545134969-8debd725b733?w=600&q=80' },
                         tomorrow: { icon: CloudSun, mainTemp: '17°C', subTemp: '7°C' }
                     },
                     hot: {
-                        humidity: '55%', windSpeed: '12 KM/H', windDir: 'WEST', pressure: '1008 MB',
                         yesterday: { icon: Sun, mainTemp: '33°C', subTemp: '25°C' },
                         today: { icon: Sun, mainTemp: '35°C', subTemp: '26°C', bg: 'https://images.unsplash.com/photo-1504370805625-d32c54b16100?w=600&q=80' },
                         tomorrow: { icon: CloudLightning, mainTemp: '34°C', subTemp: '25°C' }
@@ -325,15 +194,18 @@
                 return weatherForecasts[type] || weatherForecasts.sunny;
             };
 
-            const currentBgType = weatherType === 'realtime' ? realtimeData.type : weatherType;
+            const currentBgType = weatherType === 'realtime' ? realtimeWeatherType : weatherType;
             const dates = getDates(weatherType);
             const renderData = getRenderWeatherData();
+            const MainIcon = renderData.mainIcon;
 
             useEffect(() => {
                 const requestCameraPermission = async () => {
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                         setHasCameraPermission(true);
+                        // 핵심 포인트: file:// 환경에서 매번 묻는 것을 방지하기 위해 
+                        // 카메라 스트림을 바로 끄지 않고 백그라운드에 계속 유지시켜 둡니다.
                         globalStreamRef.current = stream; 
                     } catch (err) {
                         console.error("카메라 권한 거부됨:", err);
@@ -343,6 +215,7 @@
                 requestCameraPermission();
 
                 return () => {
+                    // 브라우저 탭을 닫거나 앱이 종료될 때만 카메라를 완전히 끕니다.
                     if (globalStreamRef.current) {
                         globalStreamRef.current.getTracks().forEach(track => track.stop());
                     }
@@ -350,22 +223,6 @@
             }, []);
 
             useEffect(() => {
-                const preloadList = [
-                    { primary: ASSETS.bground, fallback: FALLBACK_ASSETS.bground },
-                    { primary: ASSETS.title, fallback: FALLBACK_ASSETS.title },
-                    { primary: ASSETS.weatherStudioBg, fallback: FALLBACK_ASSETS.weatherStudioBg },
-                    ...Object.keys(ASSETS.weatherBgs).map(key => ({
-                        primary: ASSETS.weatherBgs[key],
-                        fallback: FALLBACK_ASSETS.weatherBgs[key]
-                    }))
-                ];
-
-                preloadList.forEach(({ primary, fallback }) => {
-                    const img = new Image();
-                    img.onerror = () => { img.src = fallback; };
-                    img.src = primary;
-                });
-
                 const loadScript = (src) => {
                     return new Promise((resolve, reject) => {
                         if (document.querySelector(`script[src="${src}"]`)) {
@@ -388,6 +245,8 @@
                         
                         if (window.SelfieSegmentation && window.Camera) {
                             setIsMediaPipeLoaded(true);
+                        } else {
+                            console.error("MediaPipe 라이브러리를 로드하지 못했습니다.");
                         }
                     } catch (error) {
                         console.error("스크립트 로드 오류:", error);
@@ -465,16 +324,18 @@
             const stopCamera = () => {
                 if (cameraRef.current) {
                     cameraRef.current.stop();
-                    cameraRef.current = null;
+                    cameraRef.current = null; // 완전히 초기화하여 재시작 시 꼬임 방지
                 }
             };
 
             useEffect(() => {
+                // 방송 단계(3~7)에 진입했고, MediaPipe가 로드되었으며, 카메라가 아직 켜지지 않았을 때만 시작
                 if (step >= 3 && step <= 7) {
                     if (isMediaPipeLoaded && !cameraRef.current) {
                         startCameraAndSegmentation();
                     }
                 } else if (step < 3 || step > 7) {
+                    // 방송 단계를 벗어나면 (예: 1단계, 2단계) 카메라 중지
                     stopCamera();
                 }
             }, [step, isMediaPipeLoaded]);
@@ -490,7 +351,9 @@
                             console.warn("전체화면 요청 거부됨:", err);
                         });
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.warn("Fullscreen API 오류", e);
+                }
                 setStep(2);
             };
 
@@ -627,10 +490,8 @@
                         <div className="relative w-full h-screen bg-black">
                             <video 
                                 className="w-full h-full object-cover" 
-                                src={ASSETS.openingVideo} 
-                                onError={(e) => handleVideoError(e, FALLBACK_ASSETS.openingVideo)}
+                                src="https://github.com/sae6gnicky/weathercast/raw/main/opening.mp4" 
                                 autoPlay 
-                                playsInline
                                 onEnded={handleNext} 
                             />
                             {showTitle && (
@@ -646,23 +507,13 @@
 
                     {(step === 3 || step === 7) && (
                         <div className="relative w-full h-screen bg-black">
-                            <img 
-                                src={ASSETS.bground} 
-                                onError={(e) => handleImgError(e, FALLBACK_ASSETS.bground)}
-                                alt="뉴스룸 배경" 
-                                className="absolute inset-0 w-full h-full object-cover" 
-                            />
+                            <img src="https://github.com/sae6gnicky/weathercast/raw/main/bground.png" alt="뉴스룸 배경" className="absolute inset-0 w-full h-full object-cover" />
                             
                             <div className="absolute bottom-0 left-0 w-full h-[95%] flex items-end justify-center z-10 pointer-events-none">
                                 <canvas ref={canvasRef} className="w-full h-full object-contain object-bottom -scale-x-100" />
                             </div>
                             
-                            <img 
-                                src={ASSETS.title} 
-                                onError={(e) => handleImgError(e, FALLBACK_ASSETS.title)}
-                                alt="뉴스 타이틀" 
-                                className="absolute inset-0 w-full h-full z-20 object-cover pointer-events-none" 
-                            />
+                            <img src="https://github.com/sae6gnicky/weathercast/raw/main/title.png" alt="뉴스 타이틀" className="absolute inset-0 w-full h-full z-20 object-cover pointer-events-none" />
                             
                             {step === 3 && (
                                 <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 bg-blue-900/90 text-white px-8 py-4 rounded-2xl border-l-8 border-yellow-400 z-50 shadow-2xl">
@@ -678,18 +529,13 @@
 
                     {(step === 4 || step === 6) && (
                         <div className="relative w-full h-screen bg-blue-500">
-                            <img 
-                                src={ASSETS.weatherStudioBg} 
-                                onError={(e) => handleImgError(e, FALLBACK_ASSETS.weatherStudioBg)}
-                                alt="날씨 배경" 
-                                className="absolute inset-0 w-full h-full object-cover" 
-                            />
+                            <img src="https://github.com/sae6gnicky/weathercast/raw/main/2.png" alt="날씨 배경" className="absolute inset-0 w-full h-full object-cover" />
                             
                             <div className="absolute top-8 right-12 z-20 flex space-x-8 text-white bg-black/20 p-5 rounded-3xl backdrop-blur-md border border-white/20">
-                                <div className="flex flex-col items-center"><Droplets size={28} className="mb-2 text-blue-200" /> <span className="font-bold text-lg">{renderData.humidity}</span></div>
-                                <div className="flex flex-col items-center"><Wind size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">{renderData.windSpeed}</span></div>
-                                <div className="flex flex-col items-center"><Compass size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">{renderData.windDir}</span></div>
-                                <div className="flex flex-col items-center"><Gauge size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">{renderData.pressure}</span></div>
+                                <div className="flex flex-col items-center"><Droplets size={28} className="mb-2 text-blue-200" /> <span className="font-bold text-lg">40%</span></div>
+                                <div className="flex flex-col items-center"><Wind size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">24 KM/H</span></div>
+                                <div className="flex flex-col items-center"><Compass size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">WEST</span></div>
+                                <div className="flex flex-col items-center"><Gauge size={28} className="mb-2 text-gray-200" /> <span className="font-bold text-lg">1023 MB</span></div>
                             </div>
 
                             <div className="absolute top-40 right-12 z-20 w-[55%] grid grid-cols-3 gap-6">
@@ -740,12 +586,7 @@
 
                     {step === 5 && (
                         <div className="relative w-full h-screen bg-black">
-                            <img 
-                                src={ASSETS.weatherBgs[currentBgType] || ASSETS.weatherBgs.sunny} 
-                                onError={(e) => handleImgError(e, FALLBACK_ASSETS.weatherBgs[currentBgType] || FALLBACK_ASSETS.weatherBgs.sunny)}
-                                alt="야외 배경" 
-                                className="absolute inset-0 w-full h-full object-cover opacity-90" 
-                            />
+                            <img src={weatherBackgrounds[currentBgType]} alt="야외 배경" className="absolute inset-0 w-full h-full object-cover opacity-90" />
                             
                             <div className="absolute bottom-0 left-0 w-full h-[95%] flex items-end justify-center z-10 pointer-events-none">
                                 <canvas ref={canvasRef} className="w-full h-full object-contain object-bottom -scale-x-100" />
